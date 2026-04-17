@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shop Dashboard</title>
+  <title>ONE LDN — Shop Dashboard</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
@@ -1006,11 +1006,24 @@ async function loadProductLookup() {
 }
 
 async function loadFromSupabase() {
+  // Supabase PostgREST caps responses at 1000 rows by default.
+  // Paginate in batches of 1000 until the last page returns fewer rows.
   try {
-    const data = await sbGet('shop_sales',
-      'select=*&order=week_start&order=date&order=order_no&order=order_line&limit=100000');
-    if (!Array.isArray(data) || !data.length) return false;
-    allRecords = data.map(enrichRecord);
+    const PAGE = 1000;
+    let allData = [];
+    let offset  = 0;
+
+    while (true) {
+      const batch = await sbGet('shop_sales',
+        `select=*&order=week_start&order=date&order=order_no&order=order_line&limit=${PAGE}&offset=${offset}`);
+      if (!Array.isArray(batch) || !batch.length) break;
+      allData = allData.concat(batch);
+      if (batch.length < PAGE) break;   // reached the final page
+      offset += PAGE;
+    }
+
+    if (!allData.length) return false;
+    allRecords = allData.map(enrichRecord);
     document.getElementById('dataDot').classList.add('live');
     return true;
   } catch(e) {
@@ -1064,9 +1077,14 @@ async function handleFiles(files) {
   let inserted = 0;
   let skipped  = 0;
   try {
-    const result = await sbUpsert('shop_sales', allDbRows, 'order_no,order_line');
-    inserted = Array.isArray(result) ? result.length : 0;
-    skipped  = allDbRows.length - inserted;
+    // Batch in chunks of 500 — stays well inside PostgREST payload limits
+    const CHUNK = 500;
+    for (let i = 0; i < allDbRows.length; i += CHUNK) {
+      const chunk  = allDbRows.slice(i, i + CHUNK);
+      const result = await sbUpsert('shop_sales', chunk, 'order_no,order_line');
+      inserted += Array.isArray(result) ? result.length : 0;
+    }
+    skipped = allDbRows.length - inserted;
 
     // Log the upload
     const datesSorted = allDbRows.map(r => r.date).sort();
