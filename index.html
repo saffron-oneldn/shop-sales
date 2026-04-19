@@ -435,6 +435,26 @@
     .invoice-meta { font-size: 11px; color: #8b8fa3; margin-bottom: 14px; }
     .invoice-meta strong { color: #b0b3c6; }
 
+    /* ── Delivery log table ── */
+    .deliv-log-table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    .deliv-log-table th {
+      text-align: left; padding: 7px 10px; font-size: 11px; color: #8b8fa3;
+      font-weight: 600; border-bottom: 1px solid #2e3345; white-space: nowrap;
+    }
+    .deliv-log-table td {
+      padding: 7px 10px; border-bottom: 1px solid #1e2130; vertical-align: middle;
+    }
+    .deliv-log-table tr:last-child td { border-bottom: none; }
+    .deliv-log-table tr:hover td { background: #1e2130; }
+    .deliv-log-delete {
+      background: transparent; border: 1px solid #e1705555; color: #e17055;
+      border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .deliv-log-delete:hover { background: #e1705520; border-color: #e17055; }
+
     /* ── Responsive ── */
     @media (max-width: 900px) {
       .chart-row { grid-template-columns: 1fr; }
@@ -468,6 +488,7 @@
       <input type="file" id="csvInput" accept=".csv" multiple style="display:none">
     </label>
     <button class="banner-btn secondary" id="logDeliveryBtn">+ Log Delivery</button>
+    <button class="banner-btn secondary" id="viewDeliveryLogBtn">Delivery Log</button>
     <button class="banner-btn secondary" id="clearBtn" style="display:none">Clear</button>
     <div class="banner-status" id="bannerStatus">Loading…</div>
   </div>
@@ -723,6 +744,10 @@
     <!-- Step 2a: PDF upload + review -->
     <div class="modal-body" id="deliveryStepPdf" style="display:none">
       <button class="step-back-btn" id="pdfBackBtn">← Back</button>
+      <div class="form-row" id="pdfDeliveryDateRow" style="display:none">
+        <label>Date goods received</label>
+        <input type="date" id="pdfDeliveryDate">
+      </div>
       <div id="pdfUploadArea" style="border:2px dashed #3a3f55;border-radius:12px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px;transition:border-color .15s">
         <div style="font-size:28px;margin-bottom:8px">📄</div>
         <div style="font-size:13px;font-weight:600;margin-bottom:4px">Drop invoice PDFs here or click to browse</div>
@@ -783,6 +808,22 @@
   </div>
 </div>
 
+<!-- ── Delivery Log Modal ── -->
+<div class="modal-overlay" id="deliveryLogModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div>
+        <h2>Delivery Log</h2>
+        <div class="modal-sub" id="deliveryLogSub"></div>
+      </div>
+      <button class="modal-close" id="deliveryLogClose">✕</button>
+    </div>
+    <div class="modal-body" id="deliveryLogBody">
+      <div id="deliveryLogContent" style="text-align:center;color:#8b8fa3;padding:24px">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -825,6 +866,14 @@ async function sbInsert(table, row) {
     body:    JSON.stringify(row),
   });
   if (!res.ok) throw new Error(`DB insert failed (${table}): ${res.status}`);
+}
+
+async function sbDelete(table, id) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method:  'DELETE',
+    headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+  });
+  if (!res.ok) throw new Error(`DB delete failed (${table}): ${res.status}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1815,6 +1864,83 @@ async function loadDeliveries(force = false) {
   return allDeliveries;
 }
 
+// ── Delivery Log modal ────────────────────────────────────────────────────
+
+function openDeliveryLogModal() {
+  document.getElementById('deliveryLogModal').classList.add('open');
+  renderDeliveryLog();
+}
+
+function closeDeliveryLogModal() {
+  document.getElementById('deliveryLogModal').classList.remove('open');
+}
+
+async function renderDeliveryLog() {
+  const content = document.getElementById('deliveryLogContent');
+  const subEl   = document.getElementById('deliveryLogSub');
+  content.innerHTML = '<div style="text-align:center;color:#8b8fa3;padding:24px">Loading…</div>';
+
+  let rows;
+  try {
+    rows = await sbGet('shop_deliveries', 'select=*&order=delivery_date.desc,id.desc');
+  } catch(e) {
+    content.innerHTML = `<div style="color:#e17055;padding:12px">Failed to load: ${e.message}</div>`;
+    return;
+  }
+
+  if (!rows || !rows.length) {
+    subEl.textContent = 'No deliveries logged yet';
+    content.innerHTML = '<div style="text-align:center;color:#4a4f66;padding:32px">No deliveries have been logged yet.</div>';
+    return;
+  }
+
+  subEl.textContent = `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
+
+  const rowsHtml = rows.map(r => {
+    const [y, m, d] = (r.delivery_date || '').split('-');
+    const dateStr   = y ? `${d}/${m}/${y}` : '—';
+    const displayName = (productLookup[r.product_name_raw] || {}).display_name || r.product_name_raw;
+    const notes     = (r.notes || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const name      = displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `<tr>
+      <td style="white-space:nowrap">${dateStr}</td>
+      <td>${name}</td>
+      <td style="text-align:right;font-weight:600">${r.quantity_received}</td>
+      <td style="color:#8b8fa3;font-size:11px">${notes}</td>
+      <td><button class="deliv-log-delete" data-id="${r.id}">Delete</button></td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <table class="deliv-log-table">
+      <thead>
+        <tr>
+          <th>Date received</th>
+          <th>Product</th>
+          <th style="text-align:right">Qty (units)</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+
+  content.querySelectorAll('.deliv-log-delete').forEach(btn => {
+    btn.addEventListener('click', () => deleteDeliveryEntry(btn.dataset.id));
+  });
+}
+
+async function deleteDeliveryEntry(id) {
+  if (!confirm('Delete this delivery entry?')) return;
+  try {
+    await sbDelete('shop_deliveries', id);
+    allDeliveries = null;
+    renderDeliveryLog();
+  } catch(e) {
+    alert('Delete failed: ' + e.message);
+  }
+}
+
 async function renderOrderPrediction() {
   const tbody   = document.getElementById('predTbody');
   const metaEl  = document.getElementById('predMeta');
@@ -2079,6 +2205,8 @@ function openDeliveryModal() {
   document.getElementById('pdfUploadArea').style.display   = '';
   document.getElementById('pdfParsing').style.display      = 'none';
   document.getElementById('pdfReviewArea').style.display   = 'none';
+  document.getElementById('pdfDeliveryDateRow').style.display = 'none';
+  document.getElementById('pdfDeliveryDate').value         = '';
   document.getElementById('pdfFileInput').value            = '';
   document.getElementById('pdfReviewBody').innerHTML       = '';
   document.getElementById('pdfInvoiceMeta').textContent    = '';
@@ -2399,6 +2527,9 @@ async function handleInvoicePdfs(files) {
 
     document.getElementById('pdfParsing').style.display    = 'none';
     document.getElementById('pdfReviewArea').style.display = '';
+    const _pdfDateEl = document.getElementById('pdfDeliveryDate');
+    if (!_pdfDateEl.value) _pdfDateEl.value = new Date().toISOString().slice(0, 10);
+    document.getElementById('pdfDeliveryDateRow').style.display = '';
 
     if (!allItems.length) {
       document.getElementById('pdfInvoiceMeta').innerHTML =
@@ -2505,9 +2636,9 @@ async function submitPdfDeliveries() {
     if (!product) return;
     const row = window._pdfInvoiceRows[idx];
     if (!row || row.totalUnits < 1) return;
-    const date     = row._invoiceDate;
+    const date     = document.getElementById('pdfDeliveryDate').value || row._invoiceDate;
     const orderNo  = row._invoiceOrder;
-    if (!date) return; // can't log without a date
+    if (!date) return;
     deliveries.push({
       delivery_date:     date,
       product_name_raw:  product,
@@ -2657,6 +2788,11 @@ async function init() {
 
   // ── Log Delivery modal ──
   document.getElementById('logDeliveryBtn').addEventListener('click', openDeliveryModal);
+  document.getElementById('viewDeliveryLogBtn').addEventListener('click', openDeliveryLogModal);
+  document.getElementById('deliveryLogClose').addEventListener('click', closeDeliveryLogModal);
+  document.getElementById('deliveryLogModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('deliveryLogModal')) closeDeliveryLogModal();
+  });
   document.getElementById('deliveryModalClose').addEventListener('click', closeDeliveryModal);
   document.getElementById('deliveryModal').addEventListener('click', e => {
     if (e.target === document.getElementById('deliveryModal')) closeDeliveryModal();
