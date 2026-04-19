@@ -1228,10 +1228,11 @@ function enrichRecord(r) {
   return {
     ...r,
     // camelCase aliases for client-side convenience
-    orderNo:    r.order_no,
-    orderLine:  r.order_line,
-    productName: lu.display_name || r.product_name_raw,
-    weekStart:  r.week_start,
+    orderNo:        r.order_no,
+    orderLine:      r.order_line,
+    productNameRaw: r.product_name_raw,
+    productName:    lu.display_name || r.product_name_raw,
+    weekStart:      r.week_start,
     grossRevenue: parseFloat(r.gross_revenue) || 0,
     quantity:   parseInt(r.quantity) || 0,
     // lookup-derived
