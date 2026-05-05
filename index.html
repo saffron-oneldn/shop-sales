@@ -1176,11 +1176,12 @@ function processRows(rows) {
   for (const row of rows) {
     const dateStr    = (row['Date']       || '').trim();
     const itemsStr   = (row['Items']      || '').trim();
-    const orderNo    = (row['Order No.']  || '').trim();
+    // Accept both "Order No." (with period) and "Order No" (without)
+    const orderNo    = (row['Order No.']  || row['Order No'] || '').trim();
     const customer   = (row['Customer']   || '').trim() || null;
     const email      = (row['Email']      || '').trim() || null;
     const state      = (row['State']      || 'Paid').trim();
-    const fulfilled  = (row['Fulfilled']  || '').trim() || null;
+    const fulfilled  = (row['Fulfilment'] || row['Fulfilled'] || '').trim() || null;
 
     if (!dateStr || !itemsStr || !orderNo) continue;
     const dateObj = parseDDMMYYYY(dateStr);
@@ -1324,7 +1325,32 @@ async function handleFiles(files) {
   if (!allDbRows.length) {
     document.getElementById('uploadText').innerHTML =
       'Drop WodBoard Shop Sales CSV(s) here or <u>click to browse</u>';
-    setStatus('err', errors.length ? errors[0] : 'No valid data found');
+    if (errors.length) {
+      setStatus('err', errors[0]);
+    } else {
+      // Diagnose why no rows were found
+      let diagMsg = 'No valid data found';
+      if (fileArr.length > 0) {
+        try {
+          const sample = await parseFile(fileArr[0]);
+          const cols = sample.meta?.fields || [];
+          if (!cols.length) {
+            diagMsg = 'CSV appears empty or unreadable';
+          } else {
+            const hasDate  = cols.includes('Date');
+            const hasItems = cols.includes('Items');
+            const hasOrder = cols.includes('Order No.') || cols.includes('Order No');
+            if (!hasDate || !hasItems || !hasOrder) {
+              const missing = [!hasDate && 'Date', !hasItems && 'Items', !hasOrder && 'Order No.'].filter(Boolean);
+              diagMsg = `Missing columns: ${missing.join(', ')} — found: ${cols.join(', ')}`;
+            } else if (sample.data.length === 0) {
+              diagMsg = 'CSV has no data rows (header only?)';
+            }
+          }
+        } catch(e) { /* ignore */ }
+      }
+      setStatus('err', diagMsg);
+    }
     return;
   }
 
