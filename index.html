@@ -520,59 +520,6 @@
       .tab  { text-align: left; }
       .data-banner { flex-direction: column; align-items: stretch; }
     }
-
-    /* ── Consumables KPI cards ── */
-    .cons-kpi-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .cons-kpi-card {
-      flex: 1; min-width: 180px; background: #111111;
-      border: 1px solid #1e1e1e; border-radius: 12px;
-      padding: 16px 20px; position: relative; overflow: hidden;
-    }
-    .cons-kpi-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    }
-    .cons-kpi-card.gold::before  { background: #e8c547; }
-    .cons-kpi-card.red::before   { background: #f87171; }
-    .cons-kpi-card.amber::before { background: #e8c547; }
-    .cons-kpi-label { font-size: 11px; color: #666666; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
-    .cons-kpi-value { font-size: 26px; font-weight: 700; color: #f0f0f0; line-height: 1.2; }
-    .cons-kpi-sub   { font-size: 11px; color: #666666; margin-top: 4px; }
-
-    /* ── Consumables sub-tabs ── */
-    .cons-sub-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
-    .cons-sub-tab {
-      padding: 6px 14px; border: 1px solid #2a2a2a; border-radius: 6px;
-      background: transparent; color: #666666; font-size: 12px; font-weight: 600;
-      cursor: pointer; transition: all .2s;
-    }
-    .cons-sub-tab.active { background: rgba(232,197,71,.15); border-color: #e8c547; color: #e8c547; }
-    .cons-sub-tab:hover  { border-color: #e8c547; color: #f0f0f0; }
-
-    /* ── Consumables tab panels ── */
-    .cons-panel { display: none; }
-    .cons-panel.active { display: block; }
-
-    /* ── Stock take subpage ── */
-    .stock-take-subpage { display: none; }
-    .stock-take-subpage.active { display: block; }
-    .stock-take-header {
-      display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
-    }
-    .stock-take-date-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-
-    /* ── Consumable flag badges ── */
-    .cons-flag { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
-    .cons-flag.order-now  { background:rgba(248,113,113,.15); color:#f87171; }
-    .cons-flag.order-soon { background:rgba(232,197,71,.15);  color:#e8c547; }
-    .cons-flag.ok         { background:rgba(74,222,128,.15);  color:#4ade80; }
-    .cons-flag.no-data    { background:rgba(102,102,102,.15); color:#666666; }
-
-    /* ── Qty input (stock take counts) ── */
-    .qty-input {
-      width: 80px; background: #1a1a1a; border: 1px solid #2a2a2a;
-      border-radius: 6px; color: #f0f0f0; padding: 4px 8px; font-size: 13px; text-align: right;
-    }
-    .qty-input:focus { outline: none; border-color: #e8c547; }
   </style>
 </head>
 <body>
@@ -621,7 +568,6 @@
     <button class="tab active" data-tab="summary">Weekly Summary</button>
     <button class="tab" data-tab="sellers">Top Sellers</button>
     <button class="tab" data-tab="trends">Trends</button>
-    <button class="tab" data-tab="consumables">Consumables</button>
     <button class="tab" data-tab="predict">Order Prediction <span class="tab-badge" id="predBadge" style="display:none">0</span></button>
   </div>
 
@@ -820,189 +766,6 @@
     <div class="pred-note" id="predNote"></div>
 
   </div><!-- /predict section -->
-
-  <!-- ══════════════════════════════════════════════════════════
-       CONSUMABLES TAB
-  ══════════════════════════════════════════════════════════ -->
-  <div class="section" data-tab="consumables">
-
-    <!-- KPI row -->
-    <div class="cons-kpi-row">
-      <div class="cons-kpi-card gold">
-        <div class="cons-kpi-label">Total Spend (MTD)</div>
-        <div class="cons-kpi-value" id="consKpiSpend">—</div>
-        <div class="cons-kpi-sub" id="consKpiSpendSub">All-time: —</div>
-      </div>
-      <div class="cons-kpi-card red">
-        <div class="cons-kpi-label">Critical Reorders</div>
-        <div class="cons-kpi-value" id="consKpiCritical">—</div>
-        <div class="cons-kpi-sub" id="consKpiCriticalSub">Products below threshold</div>
-      </div>
-      <div class="cons-kpi-card amber">
-        <div class="cons-kpi-label">Last Stock Take</div>
-        <div class="cons-kpi-value" id="consKpiLastTake" style="font-size:20px;padding-top:4px;">—</div>
-        <div class="cons-kpi-sub" id="consKpiLastTakeSub">Across all products</div>
-      </div>
-    </div>
-
-    <!-- Sub-tab toggle -->
-    <div class="cons-sub-tabs">
-      <button class="cons-sub-tab active" data-cons-tab="stock"    onclick="showConsTab('stock')">Stock Levels</button>
-      <button class="cons-sub-tab"        data-cons-tab="delivery" onclick="showConsTab('delivery')">Delivery Log</button>
-      <button class="cons-sub-tab"        data-cons-tab="predict"  onclick="showConsTab('predict')">Order Prediction</button>
-    </div>
-
-    <!-- ── STOCK sub-panel ── -->
-    <div class="cons-panel active" id="consPanelStock">
-
-      <!-- Stock take subpage (hidden until "Log Stock Take" clicked) -->
-      <div class="stock-take-subpage" id="stockTakeSubpage">
-        <div class="stock-take-header">
-          <h3 style="font-size:15px;font-weight:700;">Log Stock Take</h3>
-          <div style="display:flex;gap:8px;">
-            <button class="banner-btn" onclick="submitStockTake()">Submit</button>
-            <button class="banner-btn secondary" onclick="closeStockTake()">Cancel</button>
-          </div>
-        </div>
-        <div class="stock-take-date-row">
-          <span style="font-size:13px;color:#666666;">Date</span>
-          <input type="date" id="stockTakeDate" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:5px 10px;font-size:13px;">
-        </div>
-        <div class="table-wrap"><table class="data-table" id="stockTakeTable">
-          <thead><tr>
-            <th>Product</th><th>Category</th>
-            <th class="right">Est. Stock</th>
-            <th class="right">Actual Count</th>
-            <th>Notes</th>
-          </tr></thead>
-          <tbody id="stockTakeTbody"></tbody>
-        </table></div>
-        <div id="stockTakeStatus" style="font-size:13px;margin-top:10px;"></div>
-      </div>
-
-      <!-- Main stock table -->
-      <div id="stockMainView">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-          <button class="banner-btn secondary" onclick="openStockTake()">Log Stock Take</button>
-        </div>
-        <div class="table-wrap"><table class="data-table">
-          <thead><tr>
-            <th>Product</th><th>Category</th>
-            <th class="right">Est. Stock</th>
-            <th class="right">Min Stock</th>
-            <th class="right">Covers (days)</th>
-            <th class="right">Velocity/wk</th>
-            <th style="text-align:center;">Flag</th>
-          </tr></thead>
-          <tbody id="consStockTbody"><tr><td colspan="7" style="text-align:center;color:#666;">Loading…</td></tr></tbody>
-        </table></div>
-      </div>
-    </div>
-
-    <!-- ── DELIVERY LOG sub-panel ── -->
-    <div class="cons-panel" id="consPanelDelivery">
-      <div class="data-banner" style="margin-bottom:16px;">
-        <div class="upload-zone" id="consUploadZone"
-             onclick="document.getElementById('consInvoiceInput').click()"
-             ondragover="event.preventDefault();this.classList.add('drag-over')"
-             ondragleave="this.classList.remove('drag-over')"
-             ondrop="handleConsFilesDrop(event)">
-          <span id="consUploadText">📄 Upload Enviropack PDF or Amazon CSV</span>
-          <input type="file" id="consInvoiceInput" accept=".pdf,.csv" multiple style="display:none" onchange="handleConsFiles(this.files)">
-        </div>
-        <button class="banner-btn secondary" onclick="openConsManualEntry()">+ Manual Entry</button>
-        <div id="consUploadStatus" style="font-size:12px;color:#666666;"></div>
-      </div>
-
-      <!-- Inline review table (shown after file parse) -->
-      <div id="consReviewArea" style="display:none;background:#111111;border:1px solid #1e1e1e;border-radius:10px;padding:16px;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <h4 style="font-size:14px;font-weight:700;">Review — confirm before logging</h4>
-          <div style="display:flex;gap:8px;">
-            <button class="banner-btn" onclick="confirmConsDeliveries()">Log All</button>
-            <button class="banner-btn secondary" onclick="document.getElementById('consReviewArea').style.display='none'">Cancel</button>
-          </div>
-        </div>
-        <div id="consReviewStatus" style="font-size:12px;margin-bottom:8px;"></div>
-        <div class="table-wrap"><table class="data-table">
-          <thead><tr>
-            <th>Date</th><th>Product</th><th>Category</th>
-            <th class="right">Qty (cases)</th>
-            <th class="right">Unit Cost</th>
-            <th class="right">Subtotal</th>
-            <th>Supplier</th><th>Invoice Ref</th>
-          </tr></thead>
-          <tbody id="consReviewTbody"></tbody>
-        </table></div>
-      </div>
-
-      <!-- Manual entry form (hidden by default) -->
-      <div id="consManualForm" style="display:none;background:#111111;border:1px solid #1e1e1e;border-radius:10px;padding:16px;margin-bottom:16px;">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px;">
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Date</div>
-            <input type="date" id="consDlvDate" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Product</div>
-            <select id="consDlvProduct" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;"></select>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Qty (cases)</div>
-            <input type="number" id="consDlvQty" min="1" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Unit Cost (£)</div>
-            <input type="number" id="consDlvCost" step="0.01" min="0" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Supplier</div>
-            <input type="text" id="consDlvSupplier" placeholder="e.g. Enviropack" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;margin-bottom:4px;">Invoice Ref</div>
-            <input type="text" id="consDlvRef" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#f0f0f0;padding:6px 10px;font-size:13px;">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="banner-btn" onclick="submitConsDlv()">Log Delivery</button>
-          <button class="banner-btn secondary" onclick="document.getElementById('consManualForm').style.display='none'">Cancel</button>
-        </div>
-        <div id="consManualStatus" style="font-size:12px;margin-top:8px;"></div>
-      </div>
-
-      <div class="table-wrap"><table class="data-table">
-        <thead><tr>
-          <th>Date</th><th>Product</th><th>Category</th><th>Supplier</th>
-          <th class="right">Qty</th>
-          <th class="right">Cost/unit</th>
-          <th class="right">Total</th>
-          <th>Invoice Ref</th><th></th>
-        </tr></thead>
-        <tbody id="consDeliveryTbody"><tr><td colspan="9" style="text-align:center;color:#666;">Loading…</td></tr></tbody>
-      </table></div>
-    </div>
-
-    <!-- ── ORDER PREDICTION sub-panel ── -->
-    <div class="cons-panel" id="consPanelPredict">
-      <div class="table-wrap"><table class="data-table">
-        <thead><tr>
-          <th>Product</th><th>Category</th>
-          <th class="right">Est. Stock</th>
-          <th class="right">Min Stock</th>
-          <th class="right">Covers (days)</th>
-          <th class="right">Velocity/wk</th>
-          <th class="right">Suggested Order</th>
-          <th style="text-align:center;">Flag</th>
-        </tr></thead>
-        <tbody id="consPredTbody"><tr><td colspan="8" style="text-align:center;color:#666;">Loading…</td></tr></tbody>
-      </table></div>
-      <p style="font-size:12px;color:#666;margin-top:12px;">
-        Velocity = avg units/week from <code>shop_consumable_usage</code> over 8 weeks. Est. stock from last stock take − usage since.
-      </p>
-    </div>
-
-  </div><!-- /consumables section -->
 
 </div><!-- /container -->
 
@@ -1309,43 +1072,6 @@ function isExcludedFromPred(key, cat) {
   return PRED_EXCLUDED_CATS.has(cat) || PRED_EXCLUDED_PRODUCTS.has(key);
 }
 
-// ── Consumables product list (22 products) ──────────────────────────────────
-const CONSUMABLE_PRODUCTS = [
-  { name: 'Bin Bags 80L',              sub: 'Cleaning'      },
-  { name: 'Jumbo Toilet Rolls',         sub: 'Cleaning'      },
-  { name: 'Clinell Disinfectant Wipes', sub: 'Cleaning'      },
-  { name: 'Microfibre Cloths',          sub: 'Cleaning'      },
-  { name: 'Nitrile Gloves',             sub: 'Cleaning'      },
-  { name: 'Toilet Brushes',             sub: 'Cleaning'      },
-  { name: 'Kleenex Tissues',            sub: 'Cleaning'      },
-  { name: 'Flo Period Pads',            sub: 'Bathing'       },
-  { name: 'Flo Tampons',                sub: 'Bathing'       },
-  { name: 'Sure Men Deodorant',         sub: 'Bathing'       },
-  { name: 'Sure Women Deodorant',       sub: 'Bathing'       },
-  { name: 'Bubble Tea Straws',          sub: 'Gym Supplies'  },
-  { name: 'Plastic Food Bags',          sub: 'Gym Supplies'  },
-  { name: 'Magnesium Chalk',            sub: 'Gym Supplies'  },
-  { name: 'WINALOT Dog Treats',         sub: 'Gym Supplies'  },
-  { name: 'Enviropack 6oz Cups',        sub: 'Cafe Supplies' },
-  { name: 'Enviropack 8oz Cups',        sub: 'Cafe Supplies' },
-  { name: 'Enviropack 12oz Cups',       sub: 'Cafe Supplies' },
-  { name: 'Enviropack Lids',            sub: 'Cafe Supplies' },
-  { name: 'Enviropack 16oz Cups',       sub: 'Cafe Supplies' },
-  { name: 'Enviropack 20oz Cups',       sub: 'Cafe Supplies' },
-  { name: 'Wooden Coffee Stirrers',     sub: 'Cafe Supplies' },
-];
-const CONS_NAMES = new Set(CONSUMABLE_PRODUCTS.map(p => p.name));
-const CONS_SUB   = Object.fromEntries(CONSUMABLE_PRODUCTS.map(p => [p.name, p.sub]));
-
-const ENVIROPACK_SKUS = {
-  'E11060': 'Enviropack 6oz Cups',
-  'E11080': 'Enviropack 8oz Cups',
-  'E11120': 'Enviropack 12oz Cups',
-  'E17314': 'Enviropack Lids',
-  'E20080': 'Enviropack 16oz Cups',
-  'E20120': 'Enviropack 20oz Cups',
-};
-
 // ═══════════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1360,11 +1086,6 @@ let activeCharts    = {};
 let periodMode   = 'rolling';   // 'rolling' | 'month'
 let rollingWeeks = 4;
 let monthFilter  = null;        // 'YYYY-MM'
-
-// Consumables state
-let consDeliveries = [];
-let consUsage      = [];
-let consStockTakes = [];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DATE + PERIOD HELPERS
@@ -2623,384 +2344,6 @@ async function renderOrderPrediction() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONSUMABLES
-// ═══════════════════════════════════════════════════════════════════════════
-
-async function loadConsumablesData() {
-  const [dlv, usage, takes] = await Promise.all([
-    sbGet('shop_consumable_deliveries', 'select=*&order=delivery_date.desc'),
-    sbGet('shop_consumable_usage',      'select=*&order=usage_date.desc'),
-    sbGet('shop_stock_takes',           'select=*&order=take_date.desc'),
-  ]);
-  consDeliveries = dlv;
-  consUsage      = usage;
-  consStockTakes = takes;
-}
-
-function calcEstStock(productName) {
-  const takes = consStockTakes
-    .filter(t => t.product_name_raw === productName)
-    .sort((a, b) => b.take_date.localeCompare(a.take_date));
-  const lastTake = takes[0];
-  if (lastTake) {
-    const dlvSince   = consDeliveries
-      .filter(d => d.product_name_raw === productName && d.delivery_date >= lastTake.take_date)
-      .reduce((s, d) => s + (d.qty_cases || 0), 0);
-    const usageSince = consUsage
-      .filter(u => u.product_name_raw === productName && u.usage_date >= lastTake.take_date)
-      .reduce((s, u) => s + Number(u.quantity_used || 0), 0);
-    return lastTake.actual_count + dlvSince - usageSince;
-  }
-  const totalDlv   = consDeliveries.filter(d => d.product_name_raw === productName)
-    .reduce((s, d) => s + (d.qty_cases || 0), 0);
-  const totalUsage = consUsage.filter(u => u.product_name_raw === productName)
-    .reduce((s, u) => s + Number(u.quantity_used || 0), 0);
-  return totalDlv > 0 ? totalDlv - totalUsage : null;
-}
-
-function calcVelocity(productName, weeks = 8) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - weeks * 7);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  const used = consUsage
-    .filter(u => u.product_name_raw === productName && u.usage_date >= cutoffStr)
-    .reduce((s, u) => s + Number(u.quantity_used || 0), 0);
-  return used / weeks;
-}
-
-function getConsFlag(productName) {
-  const estStock = calcEstStock(productName);
-  const minStock = productLookup[productName]?.min_stock_units ?? null;
-  const vel      = calcVelocity(productName);
-  if (estStock === null && vel === 0) return 'no-data';
-  if (minStock !== null && estStock !== null && estStock < minStock) return 'order-now';
-  const covers = vel > 0 && estStock !== null ? (estStock / vel) * 7 : null;
-  if (covers !== null && covers < 7)  return 'order-now';
-  if (covers !== null && covers < 14) return 'order-soon';
-  return 'ok';
-}
-
-function consFlg(flag) {
-  const labels = { 'order-now':'🔴 Order now','order-soon':'🟡 Order soon','ok':'🟢 OK','no-data':'— No data' };
-  return `<span class="cons-flag ${flag}">${labels[flag] || flag}</span>`;
-}
-
-function showConsTab(tab) {
-  document.querySelectorAll('.cons-sub-tab').forEach(b =>
-    b.classList.toggle('active', b.dataset.consTab === tab)
-  );
-  document.querySelectorAll('.cons-panel').forEach(p => p.classList.remove('active'));
-  const panelId = { stock:'consPanelStock', delivery:'consPanelDelivery', predict:'consPanelPredict' }[tab];
-  document.getElementById(panelId)?.classList.add('active');
-}
-
-function renderConsKPIs() {
-  const now      = new Date();
-  const mtdStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  const mtdSpend = consDeliveries
-    .filter(d => d.delivery_date >= mtdStart)
-    .reduce((s, d) => s + Number(d.total || (d.unit_cost || 0) * (d.qty_cases || 0)), 0);
-  const allSpend = consDeliveries
-    .reduce((s, d) => s + Number(d.total || (d.unit_cost || 0) * (d.qty_cases || 0)), 0);
-  document.getElementById('consKpiSpend').textContent    = `£${mtdSpend.toFixed(2)}`;
-  document.getElementById('consKpiSpendSub').textContent = `All-time: £${allSpend.toFixed(2)}`;
-
-  const critical = CONSUMABLE_PRODUCTS.filter(p => getConsFlag(p.name) === 'order-now');
-  document.getElementById('consKpiCritical').textContent    = critical.length;
-  document.getElementById('consKpiCriticalSub').textContent = critical.length
-    ? critical.slice(0,3).map(p => p.name).join(', ')
-    : 'All stocked';
-
-  const lastTake  = [...consStockTakes].sort((a,b) => b.take_date.localeCompare(a.take_date))[0];
-  const daysSince = lastTake ? Math.floor((Date.now() - new Date(lastTake.take_date)) / 86400000) : null;
-  document.getElementById('consKpiLastTake').textContent    = lastTake ? lastTake.take_date : 'Never';
-  document.getElementById('consKpiLastTakeSub').textContent = daysSince !== null ? `${daysSince} days ago` : 'No stock take recorded';
-}
-
-function renderConsStock() {
-  document.getElementById('consStockTbody').innerHTML = CONSUMABLE_PRODUCTS.map(p => {
-    const est    = calcEstStock(p.name);
-    const vel    = calcVelocity(p.name);
-    const covers = vel > 0 && est !== null ? Math.round((est / vel) * 7) : null;
-    const min    = productLookup[p.name]?.min_stock_units ?? null;
-    return `<tr>
-      <td>${p.name}</td>
-      <td><span class="supplier-pill">${p.sub}</span></td>
-      <td class="right">${est !== null ? Math.round(est) : '—'}</td>
-      <td class="right">${min !== null ? min : '—'}</td>
-      <td class="right">${covers !== null ? covers + 'd' : '—'}</td>
-      <td class="right">${vel > 0 ? vel.toFixed(1) : '—'}</td>
-      <td style="text-align:center;">${consFlg(getConsFlag(p.name))}</td>
-    </tr>`;
-  }).join('');
-}
-
-function renderConsDeliveries() {
-  const tbody = document.getElementById('consDeliveryTbody');
-  if (!consDeliveries.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;">No deliveries logged yet.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = consDeliveries.map(d => `<tr>
-    <td>${d.delivery_date}</td>
-    <td>${d.product_name_raw}</td>
-    <td>${CONS_SUB[d.product_name_raw] || d.subcategory || '—'}</td>
-    <td>${d.supplier || '—'}</td>
-    <td class="right">${d.qty_cases}</td>
-    <td class="right">${d.unit_cost != null ? '£' + Number(d.unit_cost).toFixed(2) : '—'}</td>
-    <td class="right">£${Number(d.total || (d.unit_cost || 0) * (d.qty_cases || 0)).toFixed(2)}</td>
-    <td>${d.notes || '—'}</td>
-    <td><button class="banner-btn secondary" style="padding:3px 8px;font-size:11px;" onclick="deleteConsDlv('${d.id}')">Delete</button></td>
-  </tr>`).join('');
-}
-
-function renderConsPrediction() {
-  document.getElementById('consPredTbody').innerHTML = CONSUMABLE_PRODUCTS.map(p => {
-    const est       = calcEstStock(p.name);
-    const vel       = calcVelocity(p.name);
-    const covers    = vel > 0 && est !== null ? Math.round((est / vel) * 7) : null;
-    const min       = productLookup[p.name]?.min_stock_units ?? null;
-    const suggested = vel > 0 ? Math.max(0, Math.ceil(vel * 4 - (est || 0))) : null;
-    return `<tr>
-      <td>${p.name}</td>
-      <td><span class="supplier-pill">${p.sub}</span></td>
-      <td class="right">${est !== null ? Math.round(est) : '—'}</td>
-      <td class="right">${min !== null ? min : '—'}</td>
-      <td class="right">${covers !== null ? covers + 'd' : '—'}</td>
-      <td class="right">${vel > 0 ? vel.toFixed(1) : '—'}</td>
-      <td class="right">${suggested !== null ? suggested : '—'}</td>
-      <td style="text-align:center;">${consFlg(getConsFlag(p.name))}</td>
-    </tr>`;
-  }).join('');
-}
-
-async function renderConsumables() {
-  try {
-    await loadConsumablesData();
-    renderConsKPIs();
-    renderConsStock();
-    renderConsDeliveries();
-    renderConsPrediction();
-  } catch(e) {
-    console.error('Consumables render error:', e);
-  }
-}
-
-// ── Stock take ────────────────────────────────────────────────────────────────
-
-function openStockTake() {
-  document.getElementById('stockTakeSubpage').classList.add('active');
-  document.getElementById('stockMainView').style.display = 'none';
-  document.getElementById('stockTakeDate').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('stockTakeStatus').textContent = '';
-  document.getElementById('stockTakeTbody').innerHTML = CONSUMABLE_PRODUCTS.map(p => {
-    const est = calcEstStock(p.name);
-    return `<tr>
-      <td>${p.name}</td><td>${p.sub}</td>
-      <td class="right">${est !== null ? Math.round(est) : '—'}</td>
-      <td class="right"><input type="number" class="qty-input" min="0" step="1" data-product="${p.name}" placeholder="0"></td>
-      <td><input type="text" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#f0f0f0;padding:3px 6px;font-size:12px;" data-notes="${p.name}" placeholder="Optional"></td>
-    </tr>`;
-  }).join('');
-}
-
-function closeStockTake() {
-  document.getElementById('stockTakeSubpage').classList.remove('active');
-  document.getElementById('stockMainView').style.display = '';
-}
-
-async function submitStockTake() {
-  const date   = document.getElementById('stockTakeDate').value;
-  const status = document.getElementById('stockTakeStatus');
-  if (!date) { status.textContent = 'Please set a date.'; return; }
-  const rows = [];
-  document.querySelectorAll('#stockTakeTbody input.qty-input').forEach(inp => {
-    if (inp.value.trim() === '') return;
-    const notesEl = document.querySelector(`#stockTakeTbody input[data-notes="${inp.dataset.product}"]`);
-    rows.push({ take_date: date, product_name_raw: inp.dataset.product,
-      actual_count: parseFloat(inp.value), notes: notesEl?.value || null });
-  });
-  if (!rows.length) { status.textContent = 'Enter at least one count.'; return; }
-  status.textContent = 'Saving…';
-  try {
-    for (const r of rows) await sbInsert('shop_stock_takes', r);
-    status.style.color = '#4ade80';
-    status.textContent = `Saved ${rows.length} counts.`;
-    setTimeout(() => { closeStockTake(); renderConsumables(); }, 900);
-  } catch(e) {
-    status.style.color = '#f87171';
-    status.textContent = 'Error: ' + e.message;
-  }
-}
-
-// ── Manual delivery entry ─────────────────────────────────────────────────────
-
-function openConsManualEntry() {
-  const form = document.getElementById('consManualForm');
-  const showing = form.style.display !== 'none';
-  form.style.display = showing ? 'none' : '';
-  if (!showing) {
-    const sel = document.getElementById('consDlvProduct');
-    sel.innerHTML = CONSUMABLE_PRODUCTS.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
-    document.getElementById('consDlvDate').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('consManualStatus').textContent = '';
-  }
-}
-
-async function submitConsDlv() {
-  const status   = document.getElementById('consManualStatus');
-  const date     = document.getElementById('consDlvDate').value;
-  const product  = document.getElementById('consDlvProduct').value;
-  const qty      = parseFloat(document.getElementById('consDlvQty').value);
-  const cost     = parseFloat(document.getElementById('consDlvCost').value);
-  const supplier = document.getElementById('consDlvSupplier').value.trim();
-  const ref      = document.getElementById('consDlvRef').value.trim();
-  if (!date || !product || isNaN(qty) || qty < 1) {
-    status.style.color = '#f87171';
-    status.textContent = 'Date, product and qty are required.'; return;
-  }
-  status.textContent = 'Saving…';
-  try {
-    await sbInsert('shop_consumable_deliveries', {
-      delivery_date:     date,
-      product_name_raw:  product,
-      subcategory:       CONS_SUB[product] || null,
-      qty_cases:         qty,
-      unit_cost:         isNaN(cost) ? null : cost,
-      total:             isNaN(cost) ? 0 : qty * cost,
-      supplier:          supplier || null,
-      notes:             ref || null,
-    });
-    status.style.color = '#4ade80';
-    status.textContent = 'Logged.';
-    setTimeout(() => { document.getElementById('consManualForm').style.display = 'none'; renderConsumables(); }, 800);
-  } catch(e) {
-    status.style.color = '#f87171';
-    status.textContent = 'Error: ' + e.message;
-  }
-}
-
-async function deleteConsDlv(id) {
-  if (!confirm('Delete this delivery?')) return;
-  await sbDelete('shop_consumable_deliveries', id);
-  renderConsumables();
-}
-
-// ── Invoice / CSV upload for consumables ─────────────────────────────────────
-
-function handleConsFilesDrop(e) {
-  e.preventDefault();
-  document.getElementById('consUploadZone').classList.remove('drag-over');
-  handleConsFiles(e.dataTransfer.files);
-}
-
-async function handleConsFiles(files) {
-  const pdfs = [...files].filter(f => f.name.toLowerCase().endsWith('.pdf'));
-  const csvs = [...files].filter(f => f.name.toLowerCase().endsWith('.csv'));
-  const statusEl = document.getElementById('consUploadStatus');
-  document.getElementById('consReviewArea').style.display = 'none';
-  statusEl.style.color = '#666666';
-  statusEl.textContent = 'Parsing…';
-
-  try {
-    let allItems = [];
-    for (const file of pdfs) {
-      const text     = await parseInvoicePDF(file);
-      const lines    = text.split('\n');
-      const supplier = autoDetectSupplier(lines);
-      if (supplier !== 'enviropack') {
-        statusEl.style.color = '#f87171';
-        statusEl.textContent = `"${file.name}": only Enviropack PDFs supported here. Use the main delivery log for Muscle Finesse / Tapstitch.`;
-        return;
-      }
-      const items = parseEnviropackInvoice(lines);
-      const date  = parseInvoiceDate(text);
-      const order = parseInvoiceOrderNo(text);
-      items.forEach(i => { i._date = date; i._order = order; });
-      allItems = allItems.concat(items);
-    }
-    for (const csv of csvs) {
-      const text    = await csv.text();
-      const parsed  = parseAmazonCSV(text);
-      const consItems = parsed.filter(i => i.route === 'consumables');
-      consItems.forEach(i => { i._date = i.orderDate || new Date().toISOString().slice(0,10); i._order = null; });
-      allItems = allItems.concat(consItems);
-    }
-    if (!allItems.length) {
-      statusEl.style.color = '#e8c547';
-      statusEl.textContent = 'No consumable items found.';
-      return;
-    }
-    statusEl.textContent = '';
-    renderConsReviewTable(allItems);
-  } catch(e) {
-    statusEl.style.color = '#f87171';
-    statusEl.textContent = 'Error: ' + e.message;
-    console.error(e);
-  }
-}
-
-function renderConsReviewTable(items) {
-  window._consReviewItems = items;
-  document.getElementById('consReviewStatus').textContent = '';
-  document.getElementById('consReviewArea').style.display = '';
-  document.getElementById('consReviewTbody').innerHTML = items.map(item => {
-    const name     = item.matchName || item.baseDisplay || item.invoiceName;
-    const qty      = item.shippedQty || item.orderedQty || 1;
-    const price    = item.pricePerCase || 0;
-    const subtotal = item.subtotal || (price * qty);
-    return `<tr>
-      <td>${item._date || '—'}</td>
-      <td>${name}</td>
-      <td>${CONS_SUB[name] || item.sub || '—'}</td>
-      <td class="right">${qty}</td>
-      <td class="right">£${price.toFixed(2)}</td>
-      <td class="right">£${subtotal.toFixed(2)}</td>
-      <td>${item.supplier || '—'}</td>
-      <td>${item._order || '—'}</td>
-    </tr>`;
-  }).join('');
-}
-
-async function confirmConsDeliveries() {
-  const items  = window._consReviewItems || [];
-  const status = document.getElementById('consReviewStatus');
-  if (!items.length) return;
-  status.style.color = '#666666';
-  status.textContent = 'Saving…';
-  let saved = 0, failed = 0;
-  for (const item of items) {
-    const name = item.matchName || item.baseDisplay || item.invoiceName;
-    const qty  = item.shippedQty || item.orderedQty || 1;
-    try {
-      await sbInsert('shop_consumable_deliveries', {
-        delivery_date:    item._date || new Date().toISOString().slice(0,10),
-        product_name_raw: name,
-        subcategory:      CONS_SUB[name] || item.sub || null,
-        qty_cases:        qty,
-        pack_size:        item.packSize || null,
-        unit_cost:        item.pricePerCase || null,
-        total:            item.subtotal || (item.pricePerCase || 0) * qty,
-        supplier:         item.supplier || null,
-        notes:            item._order ? `Invoice #${item._order}` : null,
-      });
-      saved++;
-    } catch(e) {
-      failed++;
-      console.warn('Cons delivery insert failed:', e, item);
-    }
-  }
-  if (failed === 0) {
-    status.style.color = '#4ade80';
-    status.textContent = `✓ ${saved} deliveries logged.`;
-    setTimeout(() => { document.getElementById('consReviewArea').style.display = 'none'; renderConsumables(); }, 800);
-  } else {
-    status.style.color = '#f87171';
-    status.textContent = `${saved} logged, ${failed} failed — check console.`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // RENDER DISPATCH
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3014,7 +2357,6 @@ function renderAll() {
   }
   if (activeTab === 'trends') renderTrends();
   if (activeTab === 'predict') renderOrderPrediction();
-  if (activeTab === 'consumables') renderConsumables();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3406,45 +2748,9 @@ function extractInvoiceItems(text) {
 
 function autoDetectSupplier(textLines) {
   const top = textLines.slice(0, 15).join(' ').toLowerCase();
-  if (top.includes('muscle finesse'))                        return 'muscle-finesse';
-  if (top.includes('tapstitch'))                             return 'tapstitch';
-  if (top.includes('enviropack') || top.includes('envirc')) return 'enviropack';
+  if (top.includes('muscle finesse'))   return 'muscle-finesse';
+  if (top.includes('tapstitch'))        return 'tapstitch';
   return 'generic';
-}
-
-function parseEnviropackInvoice(lines) {
-  const items = [];
-  let dataStart = lines.findIndex(l => /\bSKU\b/i.test(l) && /\bQty\b/i.test(l));
-  if (dataStart < 0) dataStart = 0;
-
-  for (let i = dataStart + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    // Match: E-SKU  Description  Qty  UnitPrice  Subtotal (last two floats)
-    const m = line.match(/^(E\d{4,6})\s+(.+?)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s*$/);
-    if (!m) continue;
-    const [, sku, desc, qtyStr, priceStr, subtotalStr] = m;
-    const productName = ENVIROPACK_SKUS[sku];
-    if (!productName) continue;
-    const packM    = desc.match(/Qty Per Case[:\s]+(\d+)/i);
-    const packSize = packM ? parseInt(packM[1]) : 1;
-    items.push({
-      invoiceName: productName,
-      baseDisplay: productName,
-      matchName:   productName,
-      packStr:     String(packSize),
-      packSize,
-      volume_ml:   null,
-      pricePerCase: parseFloat(priceStr),
-      orderedQty:  parseInt(qtyStr),
-      shippedQty:  parseInt(qtyStr),
-      totalUnits:  parseInt(qtyStr) * packSize,
-      subtotal:    parseFloat(subtotalStr),
-      supplier:    'Enviropack',
-      route:       'consumables',
-      sub:         'Cafe Supplies',
-    });
-  }
-  return items;
 }
 
 // ── Tapstitch invoice parser ──────────────────────────────────────────────
@@ -3508,39 +2814,12 @@ function parseTapstitchInvoice(lines) {
 // ── Amazon CSV importer (cafe products only) ──────────────────────────────
 
 const AMAZON_CAFE_ASINS = {
-  'B07LBLQN3B': 'ACTIPH Water',
-  'B092QN7HXR': 'Alpro Barista Coconut',
-  'B092QPRLDY': 'Alpro Barista Almond',
-  'B08D3DG7YC': 'Alpro Soya',
-  'B07J69Y333': 'Pip & Nut Peanut Butter',
-  'B09RSPVJCY': 'Legend Almond Butter',
-  'B0CJK658DF': 'Oatly Barista',
-  'B0CLLXY22T': 'Demerara Sugar Sticks',
-};
-
-const AMAZON_CONSUMABLE_ASINS = {
-  'B00QHKPBNI': 'Bin Bags 80L',
-  'B0FMJXZ8DL': 'Jumbo Toilet Rolls',
-  'B00FU8YU2Q': 'Clinell Disinfectant Wipes',
-  'B07HRCDDL1': 'Microfibre Cloths',
-  'B00D8Z8L3C': 'Nitrile Gloves',
-  'B0CQRV25FY': 'Toilet Brushes',
-  'B098TXJPWK': 'Kleenex Tissues',
-  'B0BRNSQF47': 'Flo Period Pads',
-  'B0D7151XB2': 'Flo Tampons',
-  'B003WL63LO': 'Sure Men Deodorant',
-  'B08M2XKRLN': 'Sure Women Deodorant',
-  'B09KYB5L68': 'Bubble Tea Straws',
-  'B0C5D6T8FP': 'Plastic Food Bags',
-  'B079Q4BHSV': 'Magnesium Chalk',
-  'B00VV90TN2': 'WINALOT Dog Treats',
-  'B07DM8Z7VT': 'Wooden Coffee Stirrers',
+  'B07LBLQN3B': 'ACTIPH Water',        // 24 x 600ml
+  // Add more cafe ASINs here as needed
 };
 
 const AMAZON_IGNORE_ASINS = new Set([
-  'B000NTGM0K','B00QMITC7G','B01DMCV7AY','B072LXQPCH','B07QXP134B',
-  'B08WS39V2J','B09CV15TNX','B0BVDK4RSN','B0C2TPW7J4','B0C2V37SVT',
-  'B0C5JFK4Z5','B0CD891F5V','B0CD8B7W9H','B0FBQ3N4BR','B0GFFTWNPM',
+  // ASINs for non-cafe items (traffic cones, hi-vis, etc.) go here
 ]);
 
 function parseAmazonCSV(csvText) {
@@ -3566,17 +2845,10 @@ function parseAmazonCSV(csvText) {
     if (AMAZON_IGNORE_ASINS.has(asin)) continue;
 
     const title     = (row['Title'] || row['product-name'] || asin).trim();
-    const totalCost = parseFloat(row['Item Net Total'] || row['Item Subtotal'] || row['Item Price'] || row['item-price'] || '0') || 0;
-    // Order Date in this CSV is DD/MM/YYYY — convert to ISO
-    const rawDate   = (row['Order Date'] || row['Purchase Date'] || row['purchase-date'] || '').trim();
-    const ddmm      = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    const orderDate = ddmm ? `${ddmm[3]}-${ddmm[2]}-${ddmm[1]}` : rawDate.slice(0, 10);
+    const totalCost = parseFloat(row['Item Price'] || row['item-price'] || '0') || 0;
+    const orderDate = (row['Purchase Date'] || row['purchase-date'] || '').slice(0, 10);
 
-    const cafeProd  = AMAZON_CAFE_ASINS[asin];
-    const consProd  = AMAZON_CONSUMABLE_ASINS[asin];
-    const route     = cafeProd ? 'cafe' : consProd ? 'consumables' : 'unknown';
-    const matchName = cafeProd || consProd || title;
-
+    const mappedProduct = AMAZON_CAFE_ASINS[asin];
     const packSize  = extractPackSize(title);
     const packStr   = extractPackStr(title) || String(packSize);
     const volMatch  = packStr.match(/(\d+)\s*ml/i);
@@ -3585,7 +2857,7 @@ function parseAmazonCSV(csvText) {
 
     items.push({
       invoiceName:  title,
-      baseDisplay:  matchName,
+      baseDisplay:  mappedProduct || title,
       variant:      null,
       packStr,
       packSize,
@@ -3595,12 +2867,11 @@ function parseAmazonCSV(csvText) {
       shippedQty:   qty,
       totalUnits,
       subtotal:     totalCost,
-      matchName,
+      matchName:    mappedProduct || title,
       supplier:     'amazon',
       asin,
       orderDate,
-      route,
-      sub:          consProd ? CONS_SUB[consProd] : null,
+      route: mappedProduct ? 'cafe' : 'unknown',
       _isAmazon: true,
     });
   }
