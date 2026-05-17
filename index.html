@@ -2677,7 +2677,19 @@ function extractInvoiceItems(text) {
 
     // Product = everything before the first price
     const pricePos   = beforeOrd.indexOf(firstPriceStr);
-    const productRaw = beforeOrd.slice(0, pricePos).replace(/[£\u00a3$]/g, '').trim();
+    let productRaw = beforeOrd.slice(0, pricePos).replace(/[££$]/g, '').trim();
+
+    // Round-3 fix: price+Ordered share same Y-bucket, product name on lower Y line.
+    // Backward pass blocked by prev item Shipped:. Scan forward for product name.
+    if (!productRaw || productRaw.length < 4) {
+      for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+        const nxt = lines[j].trim();
+        if (!nxt || SKIP_RE.test(nxt)) break;
+        if (/Shipped\s*:/i.test(nxt) || /Ordered\s*:/i.test(nxt)) break;
+        const candidate = nxt.replace(/[££][\d,]+\.[\d]{2}/g, '').replace(/\s+/g, ' ').trim();
+        if (candidate.length >= 4) { productRaw = candidate; break; }
+      }
+    }
     if (!productRaw || productRaw.length < 4) continue;
 
     // Find Shipped: N — check same line first, then next 1-3 lines
