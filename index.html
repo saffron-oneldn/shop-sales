@@ -2748,6 +2748,12 @@ function getCafeProducts() {
     .sort((a, b) => (a.display_name || a.product_name_raw).localeCompare(b.display_name || b.product_name_raw));
 }
 
+function getMerchProducts() {
+  return Object.values(productLookup)
+    .filter(p => p.active !== false && p.category === 'Merch')
+    .sort((a, b) => (a.display_name || a.product_name_raw).localeCompare(b.display_name || b.product_name_raw));
+}
+
 function populateDeliveryProductSelect() {
   const sel = document.getElementById('deliveryProduct');
   const products = getCafeProducts();
@@ -2892,11 +2898,11 @@ function matchScore(a, b) {
 }
 
 // Find best matching product_name_raw from productLookup
-function fuzzyMatchProduct(matchName) {
+function fuzzyMatchProduct(matchName, isMerch = false) {
   const norm = normStr(matchName);
-  const cafeProducts = getCafeProducts();
+  const products = isMerch ? getMerchProducts() : getCafeProducts();
   let best = null, bestScore = 0;
-  for (const p of cafeProducts) {
+  for (const p of products) {
     const candidate = normStr(p.display_name || p.product_name_raw);
     const score = matchScore(norm, candidate);
     if (score > bestScore) { bestScore = score; best = p; }
@@ -2905,13 +2911,19 @@ function fuzzyMatchProduct(matchName) {
   return { product: best, score: bestScore };
 }
 
-// Parse date from invoice — "Order Date:22 January 2026" / "22/01/2026"
+// Parse date from invoice — "Order Date:22 January 2026" / "22/01/2026" / "Feb 24, 2026"
 function parseInvoiceDate(text) {
   const months = {january:1,february:2,march:3,april:4,may:5,june:6,
                   july:7,august:8,september:9,october:10,november:11,december:12,
                   jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
   let m;
-  // "Order Date:22 January 2026" or "22 January 2026" anywhere
+  // Tapstitch: "Date of issue: Feb 24, 2026" (Month Day, Year)
+  m = text.match(/date\s+of\s+issue\s*:?\s*([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/i);
+  if (m) {
+    const mo = months[m[1].toLowerCase()];
+    if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  }
+  // Muscle Finesse: "Order Date:22 January 2026" or "22 January 2026"
   m = text.match(/Order\s*Date\s*:?\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i);
   if (!m) m = text.match(/(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i);
   if (m) {
@@ -2925,8 +2937,16 @@ function parseInvoiceDate(text) {
 
 // Parse invoice order number
 function parseInvoiceOrderNo(text) {
-  const m = text.match(/Order\s*#\s*(\d{5,})/i);
-  return m ? m[1] : null;
+  let m;
+  m = text.match(/Order\s*#\s*(\d{5,})/i);               // Muscle Finesse
+  if (m) return m[1];
+  m = text.match(/Inovice\s*Number\s*:\s*(INV-[\w-]+)/i); // Tapstitch (with typo)
+  if (m) return m[1];
+  m = text.match(/Invoice\s*Number\s*:\s*(INV-[\w-]+)/i); // Tapstitch
+  if (m) return m[1];
+  m = text.match(/Order\s*Number\s*:\s*(\d{5,})/i);       // Tapstitch
+  if (m) return m[1];
+  return null;
 }
 
 // Main PDF text extraction (pdf.js)
@@ -3146,57 +3166,106 @@ function autoDetectSupplier(textLines) {
 // ── Tapstitch invoice parser ──────────────────────────────────────────────
 // Format: "Product Name Color/Size   UnitPrice(GBP)  Qty  Amount(GBP)"
 
+// Tapstitch invoice format (actual PDF layout):
+//   Product Name line:  "Vintage Washed Oversized Cotton T-Shirt"
+//   Variant+data line:  "Black/L £7.99 £4.51 6 £75.00"   (with service fee)
+//                   or: "Mild Apricot/M £18.25 2 £36.50"  (without service fee)
+//
+// The numbers align to the variant line's Y-coordinate in the PDF, so pdf.js
+// produces two consecutive lines per item: [productName, variant+prices].
 function parseTapstitchInvoice(lines) {
   const items = [];
-  let inItems = false;
+  let headerIdx = -1;
+  let hasServiceFee = false;
 
-  for (const line of lines) {
-    if (!inItems) {
-      if (/unit\s*price/i.test(line) && /quantity/i.test(line)) { inItems = true; }
-      continue;
+  for (let i = 0; i < lines.length; i++) {
+    if (/unit\s*price/i.test(lines[i]) && /quantity/i.test(lines[i])) {
+      headerIdx     = i;
+      hasServiceFee = /service\s*fee/i.test(lines[i]);
+      break;
     }
-    if (!line.trim()) continue;
-    if (/subtotal|^total|service\s*fee|shipping|tax|vat/i.test(line.trim())) continue;
+  }
+  if (headerIdx === -1) return items;
 
-    // Match: trailing "unitprice qty amount" — 3 numbers at end separated by whitespace
-    const m = line.match(/^(.+?)\s{2,}([\d.]+)\s+([\d]+)\s+([\d.]+)\s*$/);
-    if (!m) continue;
+  const SKIP_RE = /^(subtotal|total\b|total\s+gbp|product\s*cost|production\s*cost|service\s*fee|shipping|discount|tax|if\s*you\s*have|page\s*\d)/i;
 
-    const fullName  = m[1].trim();
-    const unitPrice = parseFloat(m[2]);
-    const qty       = parseInt(m[3]);
-    const amount    = parseFloat(m[4]);
-    if (!qty || qty < 1) continue;
+  // Variant line with prices — £ prefix required on monetary values
+  // With service fee:    "Black/L £7.99 £4.51 6 £75.00"
+  // Without service fee: "Mild Apricot/M £18.25 2 £36.50"
+  const DATA_FEE_RE  = /^(.+?)\s+£([\d.]+)\s+£([\d.]+)\s+(\d+)\s+£([\d.]+)\s*$/;
+  const DATA_NOFEE_RE = /^(.+?)\s+£([\d.]+)\s+(\d+)\s+£([\d.]+)\s*$/;
+  const DATA_RE = hasServiceFee ? DATA_FEE_RE : DATA_NOFEE_RE;
 
-    // Split on last "/" for size
-    const slashIdx = fullName.lastIndexOf('/');
-    let productName = fullName, size = '', colourway = '';
-    if (slashIdx !== -1) {
-      size = fullName.slice(slashIdx + 1).trim();
-      const beforeSlash = fullName.slice(0, slashIdx).trim();
-      const parts = beforeSlash.split(/\s+/);
-      colourway = parts.pop() || '';
-      productName = parts.join(' ');
+  let i = headerIdx + 1;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line || SKIP_RE.test(line)) { i++; continue; }
+
+    const dm = line.match(DATA_RE);
+    if (dm) {
+      // Extract prices
+      const unitPrice = parseFloat(dm[2]);
+      const qty       = hasServiceFee ? parseInt(dm[4]) : parseInt(dm[3]);
+      const amount    = hasServiceFee ? parseFloat(dm[5]) : parseFloat(dm[4]);
+      if (!qty || qty < 1) { i++; continue; }
+
+      const captured = dm[1].trim(); // either "Black/L" (variant) or product name
+
+      // Determine layout: if the previous line (already stepped over) has no £ and
+      // captured contains "/" → Pattern A: prev=productName, captured=variant
+      const prevLine       = i > headerIdx + 1 ? lines[i - 1].trim() : '';
+      const prevIsNameLine = prevLine && !/£/.test(prevLine) && !SKIP_RE.test(prevLine);
+      const capturedHasSep = /\//.test(captured);
+
+      let productName, colourway, size;
+
+      if (prevIsNameLine && capturedHasSep) {
+        // Pattern A: productName on previous line, "Colour/Size" in captured
+        productName     = prevLine;
+        const slashIdx  = captured.lastIndexOf('/');
+        colourway       = captured.slice(0, slashIdx).trim();
+        size            = captured.slice(slashIdx + 1).trim();
+        i++;
+      } else {
+        // Pattern B: product+prices on this line, variant on next
+        productName     = captured;
+        const nextLine  = (lines[i + 1] || '').trim();
+        const isVariant = nextLine && /\//.test(nextLine) && !/£/.test(nextLine) && !SKIP_RE.test(nextLine);
+        if (isVariant) {
+          const slashIdx = nextLine.lastIndexOf('/');
+          colourway      = nextLine.slice(0, slashIdx).trim();
+          size           = nextLine.slice(slashIdx + 1).trim();
+          i += 2;
+        } else {
+          colourway = ''; size = '';
+          i++;
+        }
+      }
+
+      const variantStr  = [colourway, size].filter(Boolean).join(' / ') || null;
+      const invoiceName = variantStr
+        ? `${productName} ${colourway}${colourway && size ? '/' : ''}${size}`
+        : productName;
+
+      items.push({
+        invoiceName,
+        baseDisplay:  productName,
+        variant:      variantStr,
+        packStr:      '1',
+        packSize:     1,
+        volume_ml:    null,
+        pricePerCase: unitPrice,
+        orderedQty:   qty,
+        shippedQty:   qty,
+        totalUnits:   qty,
+        subtotal:     amount,
+        matchName:    invoiceName,
+        supplier:     'tapstitch',
+        _isMerch:     true,
+      });
+    } else {
+      i++;
     }
-
-    const variantStr = [colourway, size].filter(Boolean).join(' / ') || null;
-
-    items.push({
-      invoiceName: fullName,
-      baseDisplay: productName,
-      variant: variantStr,
-      packStr: '1',
-      packSize: 1,
-      volume_ml: null,
-      pricePerCase: unitPrice,
-      orderedQty: qty,
-      shippedQty: qty,
-      totalUnits: qty,
-      subtotal: amount,
-      matchName: fullName,
-      supplier: 'tapstitch',
-      _isMerch: true,
-    });
   }
   return items;
 }
@@ -3287,8 +3356,12 @@ async function handleInvoicePdfs(files) {
     const invoiceMetas = [];
 
     for (const file of validFiles) {
-      const text  = await parseInvoicePDF(file);
-      const items = extractInvoiceItems(text);
+      const text     = await parseInvoicePDF(file);
+      const lines    = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const supplier = autoDetectSupplier(lines);
+      const items    = supplier === 'tapstitch'
+        ? parseTapstitchInvoice(lines)
+        : extractInvoiceItems(text);
       const date  = parseInvoiceDate(text);
       const order = parseInvoiceOrderNo(text);
 
@@ -3341,18 +3414,23 @@ function renderPdfReviewTable(items, invoiceMetas) {
     meta.innerHTML = `${m.order ? 'Invoice <strong>#' + m.order + '</strong>' : ''} · Date: <strong>${m.date || 'unknown'}</strong> · <strong>${items.length}</strong> line items`;
   }
 
-  const cafeProducts = getCafeProducts();
-  const optionsHtml = '<option value="">— skip —</option>' +
-    cafeProducts.map(p =>
+  const cafeProducts  = getCafeProducts();
+  const merchProducts = getMerchProducts();
+  const buildOpts = products => '<option value="">— skip —</option>' +
+    products.map(p =>
       `<option value="${p.product_name_raw}">${p.display_name || p.product_name_raw}</option>`
     ).join('');
+  const cafeOptsHtml  = buildOpts(cafeProducts);
+  const merchOptsHtml = buildOpts(merchProducts);
 
   const tbody = document.getElementById('pdfReviewBody');
   tbody.innerHTML = '';
   window._pdfInvoiceRows = items.map(i => Object.assign({}, i));
 
   items.forEach((item, idx) => {
-    const { product, score } = fuzzyMatchProduct(item.matchName);
+    const isMerch     = !!item._isMerch;
+    const optionsHtml = isMerch ? merchOptsHtml : cafeOptsHtml;
+    const { product, score } = fuzzyMatchProduct(item.matchName, isMerch);
     const matchClass  = score >= 0.75 ? 'match-good' : score >= 0.45 ? 'match-warn' : 'match-none';
     const matchLabel  = score >= 0.75 ? '✓' : score >= 0.45 ? '~' : '?';
     const selectedVal = score >= 0.45 && product ? product.product_name_raw : '';
