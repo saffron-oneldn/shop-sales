@@ -498,15 +498,19 @@
     .gp-cell { text-align: right; }
     .no-cost-hint { color: #4a4f66; font-size: 11px; cursor: pointer; }
     .no-cost-hint:hover { color: #e8c547; }
+    /* Stock Action Tracker */
+    .tracker-empty { padding: 14px 0; color: #4a4f66; font-size: 13px; }
     /* Cost edit modal */
     .cost-edit-list { display: flex; flex-direction: column; gap: 10px; }
-    .cost-edit-row { display: flex; align-items: center; gap: 12px; }
+    .cost-edit-row { display: flex; align-items: center; gap: 10px; }
     .cost-edit-row label { flex: 1; font-size: 13px; color: #b0b3c6; }
     .cost-edit-row input {
-      width: 90px; padding: 5px 8px; background: #141414; border: 1px solid #2a2a2a;
+      width: 80px; padding: 5px 8px; background: #141414; border: 1px solid #2a2a2a;
       border-radius: 6px; color: #f0f0f0; font-size: 13px; text-align: right;
     }
     .cost-edit-row input:focus { outline: none; border-color: #e8c547; }
+    .cost-edit-col-hdr { display: flex; justify-content: flex-end; gap: 10px; padding: 0 0 4px; }
+    .cost-edit-col-hdr span { width: 80px; font-size: 11px; color: #4a4f66; text-align: right; }
 
     /* ── Header border ── */
     .header { margin-bottom: 22px; border-bottom: 1px solid #1e1e1e; padding-bottom: 20px; }
@@ -618,7 +622,7 @@
 
   <!-- ── Tabs ── -->
   <div class="tabs">
-    <button class="tab active" data-tab="summary">Weekly Summary</button>
+    <button class="tab active" data-tab="summary">Overview</button>
     <button class="tab" data-tab="sellers">Top Sellers</button>
     <button class="tab" data-tab="trends">Trends</button>
     <button class="tab" data-tab="predict">Order Prediction <span class="tab-badge" id="predBadge" style="display:none">0</span></button>
@@ -626,7 +630,7 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════
-       TAB: WEEKLY SUMMARY
+       TAB: OVERVIEW
        ══════════════════════════════════════════════════════════ -->
   <div class="section active" data-tab="summary">
     <div id="summaryWarn"></div>
@@ -634,12 +638,8 @@
       <strong>⚠ Refunds in this period</strong>
       <span id="refundCalloutText"></span>
     </div>
-    <div class="stock-alert-banner" id="stockAlertBanner" style="display:none">
-      <strong>⚠ Order needed now:</strong>
-      <span class="alert-items" id="stockAlertItems"></span>
-      <button onclick="goToOrderPrediction('order-now')">View all →</button>
-    </div>
     <div class="kpi-row" id="summaryKPIs"></div>
+    <div id="stockTrackerSection"></div>
     <div class="chart-row">
       <div class="chart-card">
         <div class="chart-title">Weekly Revenue (Paid)</div>
@@ -847,8 +847,8 @@
   <div class="modal">
     <div class="modal-header">
       <div>
-        <h2>Edit Cost Prices</h2>
-        <div class="modal-sub">Wholesale cost per unit (ex. VAT). Used to calculate GP%.</div>
+        <h2>Edit Costs &amp; Pack Sizes</h2>
+        <div class="modal-sub">Cost per unit (ex. VAT) for GP%. Pack size = units per case/pack for order tracker.</div>
       </div>
       <button class="modal-close" id="costEditClose">✕</button>
     </div>
@@ -1652,7 +1652,7 @@ function showUnmatchedWarn(containerId) {
 
 // ── Stock flag helpers (used by Summary KPI cards + Order Prediction badge) ──
 
-function computeStockFlags(deliveries) {
+function computeStockDetails(deliveries) {
   const VELOCITY_WEEKS = 4;
   const paid     = allRecords.filter(r => (r.state || 'Paid') !== 'Refunded');
   const allWeeks = getWeekKeys(paid);
@@ -1662,7 +1662,6 @@ function computeStockFlags(deliveries) {
 
   const velMap = {};
   for (const r of velRecs) {
-    if (r.category === 'Merch') continue;
     velMap[r.productNameRaw] = (velMap[r.productNameRaw] || 0) + r.quantity;
   }
 
@@ -1675,36 +1674,66 @@ function computeStockFlags(deliveries) {
   }
 
   const allKeys = new Set([...Object.keys(velMap), ...Object.keys(delivMap)]);
-  const orderNow = [], orderSoon = [];
+  const rows = [];
 
   for (const key of allKeys) {
     const info = productLookup[key] || {};
     const cat  = info.category || getFallbackCategory(key);
-    if (cat === 'Merch' || isExcludedFromPred(key, cat)) continue;
+    if (isExcludedFromPred(key, cat)) continue;
     const dInfo = delivMap[key];
-    if (!dInfo) continue; // no-data products don't count for alert
+    if (!dInfo) continue;
 
+    const isMerch    = cat === 'Merch';
     const avgPerWeek = (velMap[key] || 0) / nWeeks;
     const soldSince  = paid.filter(r => r.productNameRaw === key && r.date.slice(0,10) >= dInfo.lastDelivDate)
                            .reduce((s, r) => s + r.quantity, 0);
     const estStock   = Math.max(0, dInfo.lastDelivQty - soldSince);
     const minStock   = info.min_stock_units ?? null;
 
-    let flag;
+    let flag, flagOrder;
     if (minStock !== null && estStock < minStock) {
-      flag = 'order-now';
+      flag = 'order-now'; flagOrder = 0;
     } else if (avgPerWeek === 0) {
-      flag = 'sufficient';
+      flag = 'sufficient'; flagOrder = 2;
     } else {
       const coversDays = Math.round((estStock / avgPerWeek) * 7);
-      flag = coversDays > 14 ? 'sufficient' : coversDays >= 7 ? 'order-soon' : 'order-now';
+      if (coversDays > 14)    { flag = 'sufficient'; flagOrder = 2; }
+      else if (coversDays >= 7) { flag = 'order-soon'; flagOrder = 1; }
+      else                      { flag = 'order-now';  flagOrder = 0; }
     }
 
-    const name = info.display_name || key;
-    if (flag === 'order-now') orderNow.push(name);
-    else if (flag === 'order-soon') orderSoon.push(name);
+    // Qty needed: 1 month (4wk) for cafe, 2 months (8wk) for merch
+    const cycleWeeks  = isMerch ? 8 : 4;
+    const qtyRequired = Math.max(0, Math.ceil((avgPerWeek * cycleWeeks) - estStock));
+    const packSize    = info.pack_size ?? null;
+    const packQty     = packSize && qtyRequired > 0 ? Math.ceil(qtyRequired / packSize) : null;
+    const costPrice   = info.cost_price != null ? parseFloat(info.cost_price) : null;
+    const estCost     = costPrice !== null && qtyRequired > 0 ? costPrice * qtyRequired : null;
+
+    rows.push({
+      key,
+      displayName: info.display_name || key,
+      category:    cat,
+      brand:       info.brand || getFallbackBrand(key, cat),
+      avgPerWeek,
+      estStock,
+      qtyRequired,
+      packSize,
+      packQty,
+      costPrice,
+      estCost,
+      flag,
+      flagOrder,
+    });
   }
 
+  return rows;
+}
+
+function computeStockFlags(deliveries) {
+  const rows     = computeStockDetails(deliveries);
+  const orderNow  = rows.filter(r => r.flag === 'order-now').map(r => r.displayName);
+  const orderSoon = rows.filter(r => r.flag === 'order-soon').map(r => r.displayName);
   return { orderNow, orderSoon };
 }
 
@@ -1783,23 +1812,63 @@ function renderSummary() {
       <div class="kpi-sub">within 14 days at velocity</div>
     </div>`;
 
-  // Async: populate stock KPI cards + alert banner
+  // Async: populate stock KPI counts + Stock Action Tracker
   loadDeliveries().then(deliveries => {
-    const { orderNow, orderSoon } = computeStockFlags(deliveries);
+    const details   = computeStockDetails(deliveries);
+    const orderNow  = details.filter(r => r.flag === 'order-now');
+    const orderSoon = details.filter(r => r.flag === 'order-soon');
+
     const onEl = document.getElementById('orderNowCount');
     const osEl = document.getElementById('orderSoonCount');
     if (onEl) onEl.textContent = orderNow.length || '0';
     if (osEl) osEl.textContent = orderSoon.length || '0';
-    const banner  = document.getElementById('stockAlertBanner');
-    const itemsEl = document.getElementById('stockAlertItems');
-    if (banner && itemsEl) {
-      if (orderNow.length > 0) {
-        itemsEl.textContent = orderNow.slice(0,5).join(', ') + (orderNow.length > 5 ? ` +${orderNow.length - 5} more` : '');
-        banner.style.display = '';
-      } else {
-        banner.style.display = 'none';
-      }
+
+    const trackerEl = document.getElementById('stockTrackerSection');
+    if (!trackerEl) return;
+
+    const urgent = [...orderNow, ...orderSoon]
+      .sort((a, b) => a.flagOrder - b.flagOrder || b.avgPerWeek - a.avgPerWeek);
+
+    if (!urgent.length) {
+      trackerEl.innerHTML = '<div class="tracker-empty">✓ All stock levels OK</div>';
+      return;
     }
+
+    trackerEl.innerHTML = `
+      <div class="table-card" style="margin-top:20px">
+        <div class="chart-title" style="padding:14px 18px 10px;display:flex;align-items:baseline;gap:10px">
+          Stock Action Tracker
+          <span style="font-size:11px;color:#666666;font-weight:400">urgency · velocity</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Flag</th>
+              <th>Product</th>
+              <th>Category</th>
+              <th class="right">Qty Req.</th>
+              <th class="right">Qty (Pack)</th>
+              <th class="right">Est. Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${urgent.map(r => `
+              <tr style="cursor:pointer" onclick="goToOrderPrediction('${r.flag}')">
+                <td style="white-space:nowrap">
+                  ${r.flag === 'order-now' ? '🔴' : '🟡'}
+                  <span style="font-size:11px;color:${r.flag === 'order-now' ? '#f87171' : '#e8c547'}">
+                    ${r.flag === 'order-now' ? 'Order Now' : 'Order Soon'}
+                  </span>
+                </td>
+                <td style="font-weight:600">${r.displayName}</td>
+                <td>${catBadge(r.category)}</td>
+                <td class="right">${r.qtyRequired > 0 ? r.qtyRequired : '—'}</td>
+                <td class="right">${r.packQty !== null ? r.packQty + ' pk' : '—'}</td>
+                <td class="right">${r.estCost !== null ? fmtCurrency(r.estCost) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
   }).catch(() => {});
 
   // Weekly revenue bar chart
@@ -2487,15 +2556,22 @@ function openCostEditModal() {
   if (!products.length) {
     list.innerHTML = '<div style="color:#666666;font-size:13px">No cafe products found in the product lookup.</div>';
   } else {
-    list.innerHTML = products.map(p => {
-      const name = (p.display_name || p.product_name_raw).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-      const val  = p.cost_price != null ? parseFloat(p.cost_price).toFixed(2) : '';
-      return `<div class="cost-edit-row">
-        <label>${name}</label>
-        <input type="number" step="0.01" min="0" placeholder="0.00"
-          data-id="${p.id}" data-orig="${val}" value="${val}">
-      </div>`;
-    }).join('');
+    list.innerHTML =
+      '<div class="cost-edit-col-hdr"><span>Cost £</span><span>Pack sz</span></div>' +
+      products.map(p => {
+        const name     = (p.display_name || p.product_name_raw).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        const costVal  = p.cost_price  != null ? parseFloat(p.cost_price).toFixed(2) : '';
+        const packVal  = p.pack_size   != null ? parseInt(p.pack_size)               : '';
+        return `<div class="cost-edit-row">
+          <label>${name}</label>
+          <input type="number" step="0.01" min="0" placeholder="0.00"
+            data-key="${p.product_name_raw}" data-field="cost_price"
+            data-orig="${costVal}" value="${costVal}" title="Cost price £">
+          <input type="number" step="1" min="1" placeholder="—"
+            data-key="${p.product_name_raw}" data-field="pack_size"
+            data-orig="${packVal}" value="${packVal}" title="Units per pack / case">
+        </div>`;
+      }).join('');
   }
 
   document.getElementById('costEditStatus').textContent = '';
@@ -2503,36 +2579,45 @@ function openCostEditModal() {
 }
 
 async function saveCostPrices() {
-  const inputs = document.querySelectorAll('#costEditList input[data-id]');
+  const inputs = document.querySelectorAll('#costEditList input[data-key]');
   const status = document.getElementById('costEditStatus');
   const btn    = document.getElementById('costEditSaveBtn');
 
-  const changed = [...inputs].filter(inp => inp.value !== inp.dataset.orig && inp.dataset.id);
-  if (!changed.length) {
+  // Group changed inputs by product_name_raw
+  const changes = {};
+  for (const inp of inputs) {
+    if (inp.value === inp.dataset.orig) continue;
+    const key   = inp.dataset.key;
+    const field = inp.dataset.field;
+    if (!changes[key]) changes[key] = { product_name_raw: key };
+    changes[key][field] = inp.value === '' ? null : parseFloat(inp.value);
+  }
+
+  const toSave = Object.values(changes);
+  if (!toSave.length) {
     document.getElementById('costEditModal').classList.remove('open');
     return;
   }
 
   status.style.color = '#666666';
-  status.textContent = `Saving ${changed.length} price${changed.length > 1 ? 's' : ''}…`;
+  status.textContent = `Saving ${toSave.length} product${toSave.length > 1 ? 's' : ''}…`;
   btn.disabled = true;
 
   let saved = 0, failed = 0;
-  for (const inp of changed) {
-    const val = inp.value === '' ? null : parseFloat(inp.value);
+  for (const row of toSave) {
     try {
-      await sbPatch('shop_product_lookup', inp.dataset.id, { cost_price: val });
+      await sbUpsert('shop_product_lookup', row, 'product_name_raw', 'merge-duplicates');
+      if (productLookup[row.product_name_raw]) Object.assign(productLookup[row.product_name_raw], row);
       saved++;
     } catch(e) {
       failed++;
-      console.warn('Cost price save failed:', e);
+      console.warn('Product detail save failed:', e);
     }
   }
 
   if (failed === 0) {
     status.style.color = '#4ade80';
-    status.textContent = `✓ ${saved} price${saved > 1 ? 's' : ''} saved.`;
-    await loadProductLookup();
+    status.textContent = `✓ ${saved} product${saved > 1 ? 's' : ''} saved.`;
     setTimeout(() => {
       document.getElementById('costEditModal').classList.remove('open');
       renderStockHistory();
