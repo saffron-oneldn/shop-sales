@@ -3384,7 +3384,10 @@ function autoDetectSupplier(textLines) {
 function parseTapstitchInvoice(lines) {
   const items = [];
 
-  const SKIP_RE = /^(subtotal|total\b|total\s+gbp|product\s*cost|production\s*cost|service\s*fee|shipping\b|discount|tax|if\s*you\s*have|page\s*\d|from\b|bill\s*to|invoice|inovice|order\s*number|date\s*of\s*issue|tapstitch|dover|united\s*states|one\s*ldn|imperial\s*wharf|london|support@|item\s+unit|unit\s*price)/i;
+  console.debug('[Tapstitch] Extracted lines:\n' + lines.map((l, i) => `  ${i}: ${l}`).join('\n'));
+
+  // "one\s*ldn" intentionally omitted — product names start with "ONE LDN"
+  const SKIP_RE = /^(subtotal|total\b|total\s+gbp|product\s*cost|production\s*cost|service\s*fee|shipping\b|discount|tax|if\s*you\s*have|page\s*\d|from\b|bill\s*to|invoice|inovice|order\s*number|date\s*of\s*issue|tapstitch|dover|united\s*states|imperial\s*wharf|london|support@|item\s+unit|unit\s*price)/i;
 
   // Try service-fee pattern (4 money cols) first, then 3-col pattern
   const FEE_RE   = /^(.+?)\s+£([\d.]+)\s+£([\d.]+)\s+(\d+)\s+£([\d.]+)\s*$/;  // 5 groups
